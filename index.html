@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>NOVA BREACH — Tactical FPS</title>
+<style>
+*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#09131d;color:#eef8ff;font-family:system-ui,"Noto Sans KR",sans-serif}canvas{display:block}
+#hud{position:fixed;inset:0;pointer-events:none;text-shadow:0 2px 6px #000}
+.brand{position:absolute;top:18px;left:22px;font-weight:900;letter-spacing:3px}.brand span{color:#68e7df}
+.top{position:absolute;top:18px;left:50%;transform:translateX(-50%);padding:9px 18px;background:#091521d9;border:1px solid #315064;letter-spacing:1px;font-size:12px}
+.stats{position:absolute;left:20px;bottom:20px;display:flex;gap:8px}.stat,.ammo{background:#091521e8;border:1px solid #315064;padding:9px 14px}.stat small,.ammo small{display:block;color:#8ba9bc;font-size:10px;letter-spacing:2px}.stat b,.ammo b{font-size:23px}.ammo{position:absolute;right:20px;bottom:20px;text-align:right}.ammo b{color:#fff}
+#cross{position:absolute;left:50%;top:50%;width:18px;height:18px;transform:translate(-50%,-50%)}#cross:before,#cross:after{content:"";position:absolute;background:#e9ffff;box-shadow:0 0 5px #5debe2}#cross:before{width:2px;height:18px;left:8px}#cross:after{height:2px;width:18px;top:8px}
+#notice{position:absolute;top:62%;left:50%;transform:translateX(-50%);font-weight:900;letter-spacing:3px;color:#73eee4}
+#overlay{position:fixed;inset:0;display:grid;place-items:center;background:radial-gradient(ellipse,#173346dd,#030910f5);z-index:5}
+.panel{width:min(540px,calc(100vw - 30px));padding:30px;background:#091725f2;border:1px solid #3d667b;box-shadow:0 20px 80px #000b}
+.kicker{font-size:10px;color:#69e8df;letter-spacing:4px;font-weight:800}h1{font-size:38px;letter-spacing:2px;margin:10px 0}h1 span{color:#68e7df}.panel p{color:#a8bdca;line-height:1.6;font-size:13px}.keys{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin:18px 0}.keys div{padding:9px;background:#102536;border:1px solid #274355;font-size:11px;color:#b9cbd6}.keys b{color:white;display:inline-block;min-width:85px}button{width:100%;padding:15px;border:0;background:#68e7df;color:#06131d;font-weight:900;letter-spacing:3px;cursor:pointer}button:hover{background:#a1fff8}.hint{font-size:10px!important;color:#7793a5!important}
+</style>
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js"}}</script>
+</head>
+<body>
+<div id="hud" hidden><div class="brand">NOVA <span>/</span> BREACH</div><div class="top">TRAINING RANGE　|　ELIMS <b id="score">00</b>　|　TIME <b id="timer">00:00</b></div><div id="cross"></div><div id="notice"></div><div class="stats"><div class="stat"><small>HEALTH</small><b id="hp">100</b></div><div class="stat"><small>ARMOR</small><b>050</b></div></div><div class="ammo"><small>VXR-9 RIFLE</small><b id="mag">25</b> / <span id="reserve">75</span></div></div>
+<div id="overlay"><div class="panel"><div class="kicker">NOVA PROTOCOL // WEB BUILD 0.2</div><h1>NOVA <span>BREACH</span></h1><p>크롬북 브라우저용 오리지널 3D 전술 FPS 프로토타입. 훈련장에 들어가 적 봇을 상대해 봐.</p><div class="keys"><div><b>W A S D</b> 이동</div><div><b>MOUSE</b> 조준</div><div><b>LEFT CLICK</b> 사격</div><div><b>R</b> 재장전</div><div><b>SHIFT</b> 달리기</div><div><b>SPACE</b> 점프</div><div><b>ESC</b> 마우스 해제</div><div><b>CLICK</b> 다시 시작</div></div><button id="start">ENTER THE RANGE</button><p class="hint">Three.js 로딩에 인터넷 연결이 필요합니다. 데스크톱 Chrome 권장.</p></div></div>
+<script type="module">
+import * as THREE from 'three';
+const $=id=>document.getElementById(id), scene=new THREE.Scene();
+scene.background=new THREE.Color(0x8196a0);scene.fog=new THREE.Fog(0x8196a0,28,90);
+const camera=new THREE.PerspectiveCamera(76,innerWidth/innerHeight,.08,150);camera.position.set(0,1.7,10);
+const renderer=new THREE.WebGLRenderer({antialias:true});renderer.setPixelRatio(Math.min(devicePixelRatio,1.5));renderer.setSize(innerWidth,innerHeight);renderer.shadowMap.enabled=true;renderer.outputColorSpace=THREE.SRGBColorSpace;document.body.appendChild(renderer.domElement);
+scene.add(new THREE.HemisphereLight(0xc9e9ff,0x28333c,2));const sun=new THREE.DirectionalLight(0xffe8c8,2);sun.position.set(-10,20,8);sun.castShadow=true;scene.add(sun);
+const material=(color,metalness=0)=>new THREE.MeshStandardMaterial({color,roughness:.72,metalness});
+const floor=new THREE.Mesh(new THREE.PlaneGeometry(70,70),material(0x53656c));floor.rotation.x=-Math.PI/2;floor.receiveShadow=true;scene.add(floor);
+const grid=new THREE.GridHelper(70,35,0x42616a,0x52666b);grid.position.y=.01;scene.add(grid);
+const solid=[];
+function box(x,y,z,w,h,d,m,collide=true){const o=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),m);o.position.set(x,y,z);o.castShadow=true;o.receiveShadow=true;scene.add(o);if(collide)solid.push({x,z,w:w/2,d:d/2});return o}
+const wall=material(0x77888a), cover=material(0x263c49), cyan=material(0x18bdb5,.25), red=material(0xc84e61,.15);
+box(0,2,-25,52,4,1,wall);box(0,2,25,52,4,1,wall);box(-25,2,0,1,4,50,wall);box(25,2,0,1,4,50,wall);
+box(-8,1,0,3,2,5,cover);box(8,1,-4,4,2,3,cover);box(0,.8,-12,7,1.6,2,wall);box(-15,.8,11,4,1.6,3,cover);box(15,.8,12,3,1.6,5,cover);box(0,.7,15,7,1.4,2,wall);
+for(let x=-18;x<=18;x+=6){box(x,.6,-24.35,2,1.2,.15,cyan,false);box(x,.6,24.35,2,1.2,.15,cyan,false)}
+const gun=new THREE.Group();camera.add(gun);gun.position.set(.34,-.32,-.65);
+const gunMat=material(0x172632,.7);const receiver=new THREE.Mesh(new THREE.BoxGeometry(.18,.16,.58),gunMat);receiver.position.z=-.1;gun.add(receiver);
+const barrel=new THREE.Mesh(new THREE.CylinderGeometry(.035,.045,.36,12),material(0x0c1218,.85));barrel.rotation.x=Math.PI/2;barrel.position.set(0,.03,-.5);gun.add(barrel);
+const sight=new THREE.Mesh(new THREE.BoxGeometry(.08,.07,.11),material(0x31d9d0,.3));sight.position.set(0,.12,-.1);gun.add(sight);
+const botMat=material(0xc64d60,.1), bots=[], spawn=[[-15,-5],[14,-12],[-5,-19],[18,7],[-18,17],[4,18],[10,2],[-11,7]];
+function spawnBot(x,z){const g=new THREE.Group(),body=new THREE.Mesh(new THREE.CapsuleGeometry(.34,.72,4,8),botMat),head=new THREE.Mesh(new THREE.SphereGeometry(.23,12,10),material(0xd9aca0));body.position.y=.9;head.position.y=1.55;g.add(body,head);g.position.set(x,0,z);scene.add(g);bots.push({g,hp:100,alive:true,phase:Math.random()*6,attack:0})}
+spawn.forEach(p=>spawnBot(...p));
+const keys={},ray=new THREE.Raycaster(),clock=new THREE.Clock();let locked=false,started=false,hp=100,mag=25,reserve=75,score=0,elapsed=0,vy=0,grounded=true,reloading=false;
+function notice(s){$('notice').textContent=s;setTimeout(()=>{$('notice').textContent=''},800)}
+function hud(){$('hp').textContent=hp;$('mag').textContent=mag;$('reserve').textContent=reserve;$('score').textContent=String(score).padStart(2,'0')}
+function isBlocked(x,z){return solid.some(o=>Math.abs(x-o.x)<o.w+.38&&Math.abs(z-o.z)<o.d+.38)}
+function reload(){if(reloading||mag===25||reserve===0)return;reloading=true;notice('RELOADING');setTimeout(()=>{const n=Math.min(25-mag,reserve);mag+=n;reserve-=n;reloading=false;hud()},1100)}
+function shoot(){if(!locked||!started||reloading)return;if(!mag){notice('RELOAD');reload();return}mag--;hud();gun.position.z=-.55;setTimeout(()=>gun.position.z=-.65,65);ray.setFromCamera(new THREE.Vector2(0,0),camera);const meshes=[];bots.filter(b=>b.alive).forEach(b=>meshes.push(...b.g.children));const hit=ray.intersectObjects(meshes)[0];if(hit){const b=bots.find(v=>v.g===hit.object.parent);if(b){b.hp-=hit.object.geometry.type==='SphereGeometry'?55:40;notice(b.hp<=0?'TARGET DOWN':'HIT');if(b.hp<=0){b.alive=false;scene.remove(b.g);score++;hud();setTimeout(()=>spawnBot((Math.random()-.5)*35,(Math.random()-.5)*35),2200)}}}}
+function pointer(){renderer.domElement.requestPointerLock?.()}
+$('start').onclick=()=>{started=true;$('overlay').style.display='none';$('hud').hidden=false;pointer()};
+renderer.domElement.addEventListener('click',()=>{if(started&&!locked)pointer()});
+document.addEventListener('pointerlockchange',()=>{locked=document.pointerLockElement===renderer.domElement;if(!locked&&started)$('overlay').style.display='grid'});
+document.addEventListener('mousemove',e=>{if(!locked)return;camera.rotation.order='YXZ';camera.rotation.y-=e.movementX*.0022;camera.rotation.x=Math.max(-1.45,Math.min(1.45,camera.rotation.x-e.movementY*.0022))});
+document.addEventListener('keydown',e=>{keys[e.code]=true;if(e.code==='KeyR')reload();if(e.code==='Space')e.preventDefault()});document.addEventListener('keyup',e=>keys[e.code]=false);document.addEventListener('mousedown',e=>{if(e.button===0)shoot()});
+function update(dt){elapsed+=dt;$('timer').textContent=String(Math.floor(elapsed/60)).padStart(2,'0')+':'+String(Math.floor(elapsed%60)).padStart(2,'0');
+if(locked){const f=new THREE.Vector3(0,0,-1).applyQuaternion(camera.quaternion);f.y=0;f.normalize();const r=new THREE.Vector3(1,0,0).applyQuaternion(camera.quaternion);r.y=0;r.normalize();let x=0,z=0;if(keys.KeyW){x+=f.x;z+=f.z}if(keys.KeyS){x-=f.x;z-=f.z}if(keys.KeyD){x+=r.x;z+=r.z}if(keys.KeyA){x-=r.x;z-=r.z}const l=Math.hypot(x,z)||1,s=(keys.ShiftLeft?9:5.5)*dt;x=x/l*s;z=z/l*s;if(!isBlocked(camera.position.x+x,camera.position.z))camera.position.x+=x;if(!isBlocked(camera.position.x,camera.position.z+z))camera.position.z+=z;if(keys.Space&&grounded){vy=6;grounded=false}vy-=18*dt;camera.position.y+=vy*dt;if(camera.position.y<1.7){camera.position.y=1.7;vy=0;grounded=true}}
+for(const b of bots){if(!b.alive)continue;b.phase+=dt;const v=camera.position.clone().sub(b.g.position),dist=v.length();if(dist<23){v.y=0;v.normalize();const step=(dist>5?1.25:0)*dt,nx=b.g.position.x+v.x*step,nz=b.g.position.z+v.z*step;if(!isBlocked(nx,b.g.position.z))b.g.position.x=nx;if(!isBlocked(b.g.position.x,nz))b.g.position.z=nz;b.g.rotation.y=Math.atan2(v.x,v.z);b.attack+=dt;if(dist<16&&b.attack>1.7){b.attack=0;if(Math.random()<.32){hp=Math.max(0,hp-5);hud();notice('UNDER FIRE');if(!hp){hp=100;camera.position.set(0,1.7,10);notice('RESPAWN');hud()}}}}else{b.g.position.x+=Math.sin(b.phase)*dt*.2;b.g.position.z+=Math.cos(b.phase)*dt*.2}}
+if(locked){gun.position.x=.34+Math.sin(elapsed*8)*.008;gun.position.y=-.32+Math.abs(Math.sin(elapsed*8))*.006}}
+function loop(){requestAnimationFrame(loop);const dt=Math.min(clock.getDelta(),.04);if(started)update(dt);renderer.render(scene,camera)}loop();
+addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight)});
+</script>
+</body></html>
